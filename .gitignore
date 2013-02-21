@@ -1,0 +1,10 @@
+logs/
+env/
+#*
+*.pyc
+*.swp
+~
+
+sftp-config.json
+src/
+.DS_Store
