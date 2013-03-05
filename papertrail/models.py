@@ -1,6 +1,8 @@
+import types
 from django.db import models, transaction
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.contenttypes import generic
+from django.utils import timezone
 import jsonfield
 
 
@@ -70,9 +72,9 @@ class EntryManager(models.Manager):
 
 
 class Entry(models.Model):
-    timestamp = models.DateTimeField(auto_now_add=True)
-    label = models.CharField(max_length=255)
-    type = models.CharField(max_length=50, null=True)
+    timestamp = models.DateTimeField()
+    type = models.CharField(max_length=50)
+    message = models.CharField(max_length=255)
     data = jsonfield.JSONField(null=True)
 
     objects = EntryManager()
@@ -91,14 +93,33 @@ class EntryRelatedObject(models.Model):
 
 
 @transaction.commit_on_success
-def log(label, data=None, type=None, **related_objects):
-    entry = Entry.objects.create(label=label, data=data, type=type)
-
-    for name, instance in related_objects.items():
-        EntryRelatedObject.objects.create(
-            entry=entry,
-            relation_name=name,
-            related_object=instance
+def log(event_type, message, data=None, timestamp=None, targets=None):
+    entry = Entry.objects.create(
+            type=event_type,
+            message=message,
+            data=data,
+            timestamp=timestamp or timezone.now()
             )
+
+    for name, instance in (targets or {}).items():
+        
+        # Allow legacy/imported objects to be logged with a tuple specifying
+        # (content_type, object_id)
+        if type(instance) is tuple:
+            content_type, object_id = instance
+            EntryRelatedObject.objects.create(
+                entry=entry,
+                relation_name=name,
+                related_content_type=content_type,
+                related_id=object_id,
+                )
+        
+        # Create related object in the standard way
+        elif instance:
+            EntryRelatedObject.objects.create(
+                entry=entry,
+                relation_name=name,
+                related_object=instance,
+                )
 
     return entry
