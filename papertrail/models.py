@@ -4,6 +4,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.contrib.contenttypes import generic
 from django.utils import timezone
 import jsonfield
+from papertrail import signals
 
 
 # Django 1.5 custom user compatibility
@@ -92,8 +93,14 @@ class EntryRelatedObject(models.Model):
     related_object = generic.GenericForeignKey('related_content_type', 'related_id')
 
 
-@transaction.commit_on_success
 def log(event_type, message, data=None, timestamp=None, targets=None):
+    entry = _log_in_transaction(event_type, message, data=data,
+                                timestamp=timestamp, targets=targets)
+    signals.event_logged.send_robust(sender=entry)
+    return entry
+
+@transaction.commit_on_success
+def _log_in_transaction(event_type, message, data=None, timestamp=None, targets=None):
     entry = Entry.objects.create(
             type=event_type,
             message=message,

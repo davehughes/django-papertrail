@@ -1,7 +1,9 @@
+from django.dispatch import receiver
 from django.test import TestCase
 from django.utils import timezone
 from django.contrib.auth.models import User, Group
 from papertrail.models import Entry, log
+from papertrail import signals
 
 
 class TestBasic(TestCase):
@@ -39,3 +41,14 @@ class TestBasic(TestCase):
         self.assertEqual(Entry.objects.related_to(group=user).count(), 0)
         self.assertEqual(Entry.objects.related_to(user, group).count(), 1)
         self.assertEqual(Entry.objects.related_to(user=user, group=group).count(), 1)
+
+    def test_signals(self):
+
+        event_logged_counter = [0]
+
+        @receiver(signals.event_logged)
+        def on_event_logged(sender, **kwargs):
+            event_logged_counter[0] += 1
+    
+        log('test', 'Testing signal')
+        self.assertEqual(event_logged_counter[0], 1)
