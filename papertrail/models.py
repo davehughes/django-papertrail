@@ -7,16 +7,7 @@ import jsonfield
 from papertrail import signals
 
 
-# Django 1.5 custom user compatibility
-AUTH_USER_MODEL = 'auth.User'
-try:
-    from django.contrib.auth import get_user_model
-    AUTH_USER_MODEL = get_user_model()
-except ImportError as e:
-    pass
-
-
-class EntryManager(models.Manager):
+class EntryQuerySet(models.query.QuerySet):
 
     def related_to(self, *relations, **named_relations):
         '''
@@ -54,7 +45,7 @@ class EntryManager(models.Manager):
             else:
                 return instance_or_queryset
 
-        entry_qs = self.get_query_set()
+        entry_qs = self
         all_relations = [(None, r) for r in relations] + named_relations.items()
 
         for name, relation in all_relations:
@@ -70,6 +61,17 @@ class EntryManager(models.Manager):
             entry_qs = entry_qs.filter(**filters)
 
         return entry_qs.distinct()
+
+class EntryManager(models.Manager):
+
+    def get_query_set(self):
+        return EntryQuerySet(self.model)
+
+    def __getattr__(self, attr, *args):
+        # see https://code.djangoproject.com/ticket/15062 for details
+        if attr.startswith("_"):
+            raise AttributeError
+        return getattr(self.get_query_set(), attr, *args)
 
 
 class Entry(models.Model):
@@ -94,39 +96,38 @@ class EntryRelatedObject(models.Model):
 
 
 def log(event_type, message, data=None, timestamp=None, targets=None):
-    entry = _log_in_transaction(event_type, message, data=data,
-                                timestamp=timestamp, targets=targets)
-    signals.event_logged.send_robust(sender=entry)
-    return entry
 
-@transaction.commit_on_success
-def _log_in_transaction(event_type, message, data=None, timestamp=None, targets=None):
-    entry = Entry.objects.create(
-            type=event_type,
-            message=message,
-            data=data,
-            timestamp=timestamp or timezone.now()
-            )
+    try:
+        with transaction.commit_on_success():
+            entry = Entry.objects.create(
+                    type=event_type,
+                    message=message,
+                    data=data,
+                    timestamp=timestamp or timezone.now()
+                    )
 
-    for name, instance in (targets or {}).items():
-        
-        # Allow legacy/imported objects to be logged with a tuple specifying
-        # (content_type, object_id)
-        if type(instance) is tuple:
-            content_type, object_id = instance
-            EntryRelatedObject.objects.create(
-                entry=entry,
-                relation_name=name,
-                related_content_type=content_type,
-                related_id=object_id,
-                )
-        
-        # Create related object in the standard way
-        elif instance:
-            EntryRelatedObject.objects.create(
-                entry=entry,
-                relation_name=name,
-                related_object=instance,
-                )
-
-    return entry
+            for name, instance in (targets or {}).items():
+                
+                # Allow legacy/imported objects to be logged with a tuple specifying
+                # (content_type, object_id)
+                if type(instance) is tuple:
+                    content_type, object_id = instance
+                    EntryRelatedObject.objects.create(
+                        entry=entry,
+                        relation_name=name,
+                        related_content_type=content_type,
+                        related_id=object_id,
+                        )
+                
+                # Create related object in the standard way
+                elif instance:
+                    EntryRelatedObject.objects.create(
+                        entry=entry,
+                        relation_name=name,
+                        related_object=instance,
+                        )
+    except:
+        raise
+    else:
+        signals.event_logged.send_robust(sender=entry)
+        return entry
