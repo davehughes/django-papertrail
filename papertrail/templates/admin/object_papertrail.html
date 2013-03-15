@@ -1,0 +1,65 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+{% load url from future %}
+{% load admin_urls %}
+{% load admin_generic %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+<a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
+&rsaquo; <a href="{% url 'admin:app_list' app_label=app_label %}">{{ app_label|capfirst|escape }}</a>
+&rsaquo; <a href="{% url opts|admin_urlname:'changelist' %}">{{ module_name }}</a>
+&rsaquo; <a href="{% url opts|admin_urlname:'changelist' %}{{ object.pk }}">{{ object|truncatewords:"18" }}</a>
+&rsaquo; {% trans 'Paper Trail' %}
+</div>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+<div class="module">
+
+{% if action_list %}
+    <table id="change-history">
+        <thead>
+        <tr>
+            <th scope="col">{% trans 'Timestamp' %}</th>
+            <th scope="col">{% trans 'Event Type' %}</th>
+            <th scope="col">{% trans 'Message' %}</th>
+            <th scope="col">{% trans 'Targets' %}</th>
+            <th scope="col">{% trans 'Event Data' %}</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for action in action_list %}
+        <tr>
+            <th scope="row">{{ action.timestamp|date:"DATETIME_FORMAT" }}</th>
+            <td>{{ action.type }}</td>
+            <td>{{ action.message }}</td>
+            <td>
+                <ul>
+                {% for target in action.targets.all %}
+                <li>
+                    <a href="{{ target.related_object|adminview:'change' }}">
+                    {{ target.relation_name }}: {{ target.related_object }}
+                    </a>
+                </li>
+                {% endfor %}
+                </ul>
+            </td>
+            <td>
+                {% if action.data %}
+                <a href="#" data-contents="{{ action.data }}">View</a>
+                {% else %}
+                -
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+{% else %}
+    <p>{% trans "This object doesn't have any events in its paper trail yet." %}</p>
+{% endif %}
+</div>
+</div>
+{% endblock %}
