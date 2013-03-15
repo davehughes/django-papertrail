@@ -2,7 +2,7 @@ from django.dispatch import receiver
 from django.test import TestCase
 from django.utils import timezone
 from django.contrib.auth.models import User, Group
-from papertrail.models import Entry, log
+from papertrail.models import Entry, related_to, log
 from papertrail import signals
 
 
@@ -49,6 +49,18 @@ class TestBasic(TestCase):
                                .values_list('id', flat=True)),
                          set(qs.related_to(user=user, group=group)
                                .values_list('id', flat=True)))
+
+        # test related_to Q object
+        self.assertEqual(set(qs.related_to(user, group)
+                               .values_list('id', flat=True)),
+                         set(qs.filter(related_to(user))
+                               .filter(related_to(group))
+                               .values_list('id', flat=True)))
+
+        self.assertEqual(qs.filter(related_to(user) | related_to(group))
+                           .distinct().count(),
+                         3)
+
 
     def test_signals(self):
 

@@ -7,6 +7,45 @@ import jsonfield
 from papertrail import signals
 
 
+def coerce_to_queryset(instance_or_queryset):
+    if isinstance(instance_or_queryset, models.Model):
+        instance = instance_or_queryset
+        return instance.__class__.objects.filter(pk=instance.pk)
+    else:
+        return instance_or_queryset
+
+
+def related_to(obj, relation_name=None):
+    '''
+    Create a Q object expressing an event relation with an optional name.
+    This is useful as a building block for Entry.objects.related_to(), and
+    can be used to provide better query control for more complex queries
+    without the boilerplate of directly querying an Entry's related objects.
+
+    Example 1: OR query
+
+        Entry.objects.filter(related_to(user1) | related_to(user2)).distinct()
+
+    Example 2: building block to Entry.objects.related_to()
+        
+        The following are equivalent:
+
+        Entry.objects.related_to(user=user1, group=group1)
+        Entry.objects.filter(related_to(user1, 'user'))
+                     .filter(related_to(group1, 'group'))
+
+    '''
+    related_qs = coerce_to_queryset(obj)
+    content_type = ContentType.objects.get_for_model(related_qs.model)
+    filters = {
+        'targets__related_content_type': content_type,
+        'targets__related_id__in': related_qs,
+        }
+    if relation_name:
+        filters.update({'targets__relation_name': relation_name})
+    return models.Q(**filters)
+
+
 class EntryQuerySet(models.query.QuerySet):
 
     def related_to(self, *relations, **named_relations):
@@ -38,27 +77,11 @@ class EntryQuerySet(models.query.QuerySet):
 
             > Entry.objects.related_to(follower=user1, following=user2)
         '''
-        def coerce_to_queryset(instance_or_queryset):
-            if isinstance(instance_or_queryset, models.Model):
-                instance = instance_or_queryset
-                return instance.__class__.objects.filter(pk=instance.pk)
-            else:
-                return instance_or_queryset
-
         entry_qs = self
         all_relations = [(None, r) for r in relations] + named_relations.items()
 
         for name, relation in all_relations:
-            related_qs = coerce_to_queryset(relation)
-            content_type = ContentType.objects.get_for_model(related_qs.model)
-            filters = {
-                'related_objects__related_content_type': content_type,
-                'related_objects__related_id__in': related_qs,
-                }
-            if name:
-                filters.update({'related_objects__relation_name': name})
-
-            entry_qs = entry_qs.filter(**filters)
+            entry_qs = entry_qs.filter(related_to(relation, name))
 
         return entry_qs.distinct()
 
@@ -88,7 +111,7 @@ class Entry(models.Model):
 
 
 class EntryRelatedObject(models.Model):
-    entry = models.ForeignKey('Entry', related_name='related_objects')
+    entry = models.ForeignKey('Entry', related_name='targets')
     relation_name = models.CharField(max_length=100)
     related_content_type = models.ForeignKey(ContentType)
     related_id = models.PositiveIntegerField()
