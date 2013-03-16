@@ -14,7 +14,6 @@ class AdminEventLoggerMixin(object):
     application as well as to Django's built-in admin logging.
     '''
     object_papertrail_template = None
-    change_form_template = 'papertrail/change_form.html'
 
     def log_addition(self, request, object):
         super(AdminEventLoggerMixin, self).log_addition(request, object)
