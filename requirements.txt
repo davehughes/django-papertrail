@@ -1,1 +1,2 @@
 django-jsonfield>=0.8.11
+django-apptemplates==0.0.1
