@@ -7,5 +7,6 @@ setuptools.setup(
     packages=setuptools.find_packages(),
     install_requires=[
         'django-jsonfield>=0.8.11',
+        'django-apptemplates==0.0.1',
         ]
 )
