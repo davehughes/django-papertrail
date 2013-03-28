@@ -1,2 +1,2 @@
 django-jsonfield>=0.8.11
-django-apptemplates==0.0.1
+-e git+git@github.com:shlomozippel/django-apptemplates#egg=django-apptemplates
