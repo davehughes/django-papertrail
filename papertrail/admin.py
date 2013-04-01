@@ -1,3 +1,6 @@
+import json
+
+from django.core import serializers
 from django.shortcuts import get_object_or_404, render
 from django.template.response import TemplateResponse
 from django.utils.encoding import force_unicode
@@ -14,18 +17,37 @@ class AdminEventLoggerMixin(object):
     application as well as to Django's built-in admin logging.
     '''
     object_papertrail_template = None
+    
+    def _record_changes(obj, fields=None):
+        '''
+        Records the state of `obj` to a JSON-serializable object, optionally
+        recording only values in a list of `fields`.  If `fields` is not
+        specified, all fields will be recorded.
+        '''
+        rec = json.loads(serializers.serialize('json', [obj]))[0]
+        if fields:
+            rec['fields'] = {k: v for k, v in rec['fields'].items()
+                             if k in fields}
+        return rec
 
     def log_addition(self, request, object):
         super(AdminEventLoggerMixin, self).log_addition(request, object)
-        return papertrail.log('admin-edit', 'Created object', targets={
+
+        fields = self._record_changes(object)['fields']
+        return papertrail.log('admin-edit', 'Created object',
+                data={'action': 'add', 'fields': fields},
+                targets={
                    'acting_user': request.user,
                    'instance': object
                })
 
     def log_change(self, request, object, message):
         super(AdminEventLoggerMixin, self).log_change(request, object, message)
+
+        # construct_change_message() creates a JSON message that we load and
+        # store here.
         return papertrail.log('admin-edit', 'Updated object',
-                              data={'message': message},
+                              data={'changes': json.loads(message)},
                               targets={
                                   'acting_user': request.user,
                                   'instance': object
@@ -33,7 +55,11 @@ class AdminEventLoggerMixin(object):
 
     def log_deletion(self, request, object, object_repr):
         super(AdminEventLoggerMixin, self).log_deletion(request, object, object_repr)
-        return papertrail.log('admin-edit', 'Deleted object', targets={
+
+        fields = self._record_changes(object)['fields']
+        return papertrail.log('admin-edit', 'Deleted object',
+                data={'action': 'add', 'fields': fields},
+                targets={
                    'acting_user': request.user,
                    'instance': object
                })
@@ -129,3 +155,31 @@ class AdminEventLoggerMixin(object):
         
         # Once we have both pieces, we can just query the model for the ids
         return model.objects.filter(pk__in=pks)
+
+    def construct_change_message(self, request, form, formsets):
+        '''
+        Construct a detailed change message from a changed object, including
+        related objects updated via subforms.  Returns a JSON string containing
+        a structure detailing the fields changed and their updated values.
+        '''
+        def add_related_change(changes, obj, action='change', fields=None):
+            rec = self._record_changes(obj, fields=fields)
+            rec['action'] = action
+            changes['related_changes'].append(rec)
+            return rec
+
+        changes = {
+            'action': 'change',
+            'fields': self._record_changes(form.instance, form.changed_data)['fields'],
+            'related_changes': [],
+            }
+
+        for formset in (formsets or []):
+            for obj in formset.new_objects:
+                add_related_change(changes, obj, action='add')
+            for obj, changed_fields in formset.changed_objects:
+                add_related_change(changes, obj, action='change', fields=changed_fields)
+            for obj in formset.deleted_objects:
+                add_related_change(changes, obj, action='add')
+
+        return json.dumps(changes)
