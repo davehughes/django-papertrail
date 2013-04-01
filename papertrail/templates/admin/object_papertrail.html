@@ -3,6 +3,7 @@
 {% load url from future %}
 {% load admin_urls %}
 {% load admin_generic %}
+{% load static from staticfiles %}
 
 {% block breadcrumbs %}
 <div class="breadcrumbs">
@@ -48,7 +49,14 @@
             </td>
             <td>
                 {% if action.data %}
-                <a href="#" data-contents="{{ action.data }}">View</a>
+                <a href="#"
+                    class="data-view-link"
+                    data-toggle="popover"
+                    data-content="{{ action.data }}"
+                    data-placement="left"
+                    title="Event Data">
+                    View
+                </a>
                 {% else %}
                 -
                 {% endif %}
@@ -57,9 +65,22 @@
         {% endfor %}
         </tbody>
     </table>
+
 {% else %}
     <p>{% trans "This object doesn't have any events in its paper trail yet." %}</p>
 {% endif %}
 </div>
 </div>
+{% endblock %}
+
+{% block footer %}
+    {{ block.super }}
+
+    <link rel="stylesheet" href="{% static "css/bootstrap.min.css" %}"/>
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/1.8.3/jquery.min.js"></script>
+    <script src="{% static 'js/bootstrap.min.js' %}"></script>
+
+    <script type="text/javascript">
+        $('.data-view-link').popover();
+    </script>
 {% endblock %}
