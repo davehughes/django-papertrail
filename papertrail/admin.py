@@ -18,7 +18,7 @@ class AdminEventLoggerMixin(object):
     '''
     object_papertrail_template = None
     
-    def _record_changes(obj, fields=None):
+    def _record_changes(self, obj, fields=None):
         '''
         Records the state of `obj` to a JSON-serializable object, optionally
         recording only values in a list of `fields`.  If `fields` is not
