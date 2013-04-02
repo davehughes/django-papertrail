@@ -83,7 +83,7 @@ class EntryQuerySet(models.query.QuerySet):
         for name, relation in all_relations:
             entry_qs = entry_qs.filter(related_to(relation, name))
 
-        return entry_qs.distinct()
+        return entry_qs.distinct('timestamp', 'id')
 
 class EntryManager(models.Manager):
 
