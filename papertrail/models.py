@@ -109,6 +109,56 @@ class Entry(models.Model):
         ordering = ['-timestamp']
         get_latest_by = 'timestamp'
 
+    def get(self, target, default=None):
+        try:
+            return self[target]
+        except KeyError:
+            return default
+
+    def set(self, target_name, val, replace=True):
+        '''
+        Sets the updated target value, optionally replacing the existing target
+        by that name.  If `replace` is False, raises an error if the target
+        already exists.  `val` is generally a Django model instance, but can
+        also be a tuple of (content_type, id) to reference an object as the
+        contenttypes app does (this also allows references to deleted objects).
+        '''
+        target = self.get(target_name)
+        if target and not replace:
+            raise ValueError('Target {} already exists for this event'.format(target_name))
+
+        target = target or EntryRelatedObject(entry=self, relation_name=target_name)
+        if type(val) == types.TupleType:
+            content_type, object_id = val
+            target.related_content_type = content_type
+            target.related_id = object_id
+        else:
+            target.related_object = val
+        target.save()
+        return target
+
+    @property
+    def targets_map(self):
+        return dict([(t.relation_name, t.related_object)
+                     for t in self.targets.all()])
+
+    def update(self, targets_map):
+        for target, val in (targets_map or {}).items():
+            self[target] = val
+
+    def __getitem__(self, target_name):
+        try:
+            target = self.targets.get(relation_name=target_name)
+            return target.related_object
+        except EntryRelatedObject.DoesNotExist:
+            raise KeyError
+    
+    def __setitem__(self, target, val):
+        return self.set(target, val)
+
+    def __contains__(self, target_name):
+        return self.targets.filter(relation_name=target_name).count() != 0
+
 
 class EntryRelatedObject(models.Model):
     entry = models.ForeignKey('Entry', related_name='targets')
@@ -128,27 +178,7 @@ def log(event_type, message, data=None, timestamp=None, targets=None):
                     data=data,
                     timestamp=timestamp or timezone.now()
                     )
-
-            for name, instance in (targets or {}).items():
-                
-                # Allow legacy/imported objects to be logged with a tuple specifying
-                # (content_type, object_id)
-                if type(instance) is tuple:
-                    content_type, object_id = instance
-                    EntryRelatedObject.objects.create(
-                        entry=entry,
-                        relation_name=name,
-                        related_content_type=content_type,
-                        related_id=object_id,
-                        )
-                
-                # Create related object in the standard way
-                elif instance:
-                    EntryRelatedObject.objects.create(
-                        entry=entry,
-                        relation_name=name,
-                        related_object=instance,
-                        )
+            entry.update(targets)
     except:
         raise
     else:
