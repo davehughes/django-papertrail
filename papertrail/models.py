@@ -132,9 +132,10 @@ class Entry(models.Model):
             content_type, object_id = val
             target.related_content_type = content_type
             target.related_id = object_id
-        else:
+            target.save()
+        elif val:
             target.related_object = val
-        target.save()
+            target.save()
         return target
 
     @property
