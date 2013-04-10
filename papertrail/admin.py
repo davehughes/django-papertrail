@@ -45,9 +45,14 @@ class AdminEventLoggerMixin(object):
         super(AdminEventLoggerMixin, self).log_change(request, object, message)
 
         # construct_change_message() creates a JSON message that we load and
-        # store here.
+        # store here. (In case we don't get JSON back for some reason, still
+        # store the message)
+        try:
+            data = {'changes': json.loads(message)}
+        except ValueError:
+            data = {'message': message}
         return papertrail.log('admin-edit', 'Updated object',
-                              data={'changes': json.loads(message)},
+                              data=data,
                               targets={
                                   'acting_user': request.user,
                                   'instance': object
