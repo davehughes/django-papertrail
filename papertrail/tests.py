@@ -3,7 +3,7 @@ from django.test import TestCase
 from django.utils import timezone
 from django.contrib.auth.models import User, Group
 from django.contrib.contenttypes.models import ContentType
-from papertrail.models import Entry, related_to, log
+from papertrail.models import Entry, related_to, log, replace_object_in_papertrail
 from papertrail import signals
 
 
@@ -100,6 +100,22 @@ class TestBasic(TestCase):
         e.set('virtual', (user_type, 10000))
         self.assertEqual(e['virtual'], None)
         self.assertEqual(e.get('virtual', 'a-default-value'), None)
-        
 
+    def test_change_related_object(self):
+        user1 = User.objects.create_user('testuser1', 'test1@example.com')
+        user2 = User.objects.create_user('testuser2', 'test2@example.com')
 
+        Entry.objects.all().delete()
+
+        log('test-entry', 'This is a test entry', targets={'user':user1})
+        log('test-entry', 'This is a test entry', targets={'user':user2})
+
+        qs = Entry.objects.all()
+        self.assertEqual(qs.related_to(user1).count(), 1)
+        self.assertEqual(qs.related_to(user2).count(), 1)
+
+        replace_object_in_papertrail(user1, user2)
+
+        qs = Entry.objects.all()
+        self.assertEqual(qs.related_to(user1).count(), 0)
+        self.assertEqual(qs.related_to(user2).count(), 2)
