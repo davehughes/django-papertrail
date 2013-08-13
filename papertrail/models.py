@@ -169,6 +169,19 @@ class EntryRelatedObject(models.Model):
     related_object = generic.GenericForeignKey('related_content_type', 'related_id')
 
 
+def replace_object_in_papertrail(old_obj, new_obj, entry_qs=None):
+    entry_qs = entry_qs or Entry.objects.all()
+    old_obj_type = ContentType.objects.get_for_model(old_obj.__class__)
+    new_obj_type = ContentType.objects.get_for_model(new_obj.__class__)
+    related_qs = (EntryRelatedObject.objects.filter(
+        entry__in=entry_qs,
+        related_content_type=old_obj_type,
+        related_id=old_obj.pk
+        ))
+    related_qs.update(related_content_type=new_obj_type,
+                      related_id=new_obj.pk)
+
+
 def log(event_type, message, data=None, timestamp=None, targets=None):
 
     try:
