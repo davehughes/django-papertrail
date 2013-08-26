@@ -3,9 +3,9 @@ from django.db import models, transaction
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.contenttypes import generic
 from django.utils import timezone
+from django.conf import settings
 import jsonfield
 from papertrail import signals
-
 
 def coerce_to_queryset(instance_or_queryset):
     if isinstance(instance_or_queryset, models.Model):
@@ -193,6 +193,10 @@ def log(event_type, message, data=None, timestamp=None, targets=None):
                     timestamp=timestamp or timezone.now()
                     )
             entry.update(targets)
+            if settings.DEBUG:
+                WARNING = '\033[95m'
+                ENDC = '\033[0m'
+                print WARNING + "papertrail" + ENDC + " : {} : [{}] [{}]".format(event_type, message, ", ".join(["{}={}".format(str(k), str(v)) for k, v in targets.iteritems()]))
     except:
         raise
     else:
