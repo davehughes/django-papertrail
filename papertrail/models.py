@@ -194,9 +194,9 @@ def log(event_type, message, data=None, timestamp=None, targets=None):
                     )
             entry.update(targets)
             if settings.DEBUG:
-                WARNING = '\033[95m'
-                ENDC = '\033[0m'
-                print WARNING + "papertrail" + ENDC + " : {} : [{}] [{}]".format(event_type, message, ", ".join(["{}={}".format(str(k), str(v)) for k, v in targets.iteritems()]))
+                WARNING = u'\033[95m'
+                ENDC = u'\033[0m'
+                print WARNING + u'papertrail ' + ENDC + event_type + u" " + message
     except:
         raise
     else:
