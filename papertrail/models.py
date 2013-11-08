@@ -193,7 +193,7 @@ def log(event_type, message, data=None, timestamp=None, targets=None):
                     timestamp=timestamp or timezone.now()
                     )
             entry.update(targets)
-            if settings.DEBUG:
+            if getattr(settings, 'PAPERTRAIL_SHOW', False):
                 WARNING = u'\033[95m'
                 ENDC = u'\033[0m'
                 print WARNING + u'papertrail ' + ENDC + event_type + u" " + message
