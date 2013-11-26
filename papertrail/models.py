@@ -103,6 +103,12 @@ class Entry(models.Model):
     message = models.CharField(max_length=255)
     data = jsonfield.JSONField(null=True)
 
+    # Field for storing a custom 'key' for looking up specific events from
+    # external sources.  This can be used to quickly and precisely look up
+    # events that you can derive natural keys for, but aren't easily queryable
+    # using Entry's other fields.
+    external_key = models.CharField(max_length=255, null=True)
+
     objects = EntryManager()
 
     class Meta:
@@ -182,16 +188,32 @@ def replace_object_in_papertrail(old_obj, new_obj, entry_qs=None):
                       related_id=new_obj.pk)
 
 
-def log(event_type, message, data=None, timestamp=None, targets=None):
-
+def log(event_type, message, data=None, timestamp=None, targets=None, external_key=None):
     try:
+        timestamp = timestamp or timezone.now()
         with transaction.commit_on_success():
-            entry = Entry.objects.create(
+
+            # Enforce uniqueness on event_type/external_id if an external id is
+            # provided
+            if external_key:
+                entry, created = Entry.objects.get_or_create(
                     type=event_type,
-                    message=message,
-                    data=data,
-                    timestamp=timestamp or timezone.now()
-                    )
+                    external_key=external_key,
+                    defaults={
+                        'message': message,
+                        'data': data,
+                        'timestamp': timestamp,
+                        })
+                if not created:
+                    return
+            else:
+                entry = Entry.objects.create(
+                        type=event_type,
+                        message=message,
+                        data=data,
+                        timestamp=timestamp or timezone.now()
+                        )
+
             entry.update(targets)
             if getattr(settings, 'PAPERTRAIL_SHOW', False):
                 WARNING = u'\033[95m'
