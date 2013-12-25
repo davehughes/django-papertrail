@@ -85,6 +85,7 @@ class EntryQuerySet(models.query.QuerySet):
 
         return entry_qs.distinct('timestamp', 'id')
 
+
 class EntryManager(models.Manager):
 
     def get_query_set(self):
@@ -186,6 +187,28 @@ def replace_object_in_papertrail(old_obj, new_obj, entry_qs=None):
         ))
     related_qs.update(related_content_type=new_obj_type,
                       related_id=new_obj.pk)
+
+
+def search(*args, **kwargs):
+    '''
+    search(User.objects.get(id=1))
+    search(related_owner=User.objects.get(id=1))
+    search(related_owner=User.objects.get(id=1),
+           timestamp__range=(...),
+           message__startswith='Hello World')
+    '''
+    related_args = args
+    related_kwargs = {}
+    filter_kwargs = {}
+    for k, v in kwargs.items():
+        if k.startswith('related_'):
+            related_kwargs[k[8:]] = v
+        else:
+            filter_kwargs[k] = v
+
+    qs = Entry.objects.related_to(*related_args, **related_kwargs)
+    qs = qs.filter(**filter_kwargs)
+    return qs
 
 
 def log(event_type, message, data=None, timestamp=None, targets=None, external_key=None):
